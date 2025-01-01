@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
 using Newtonsoft.Json;
 using MySql.Data.MySqlClient;
-using System.Security.Cryptography;
-using System.Data;
 
 class Program
 {
@@ -28,13 +25,20 @@ class Program
 
             while (true)
             {
-                HttpListenerContext context = listener.GetContext();
-                ProcessRequest(context, connectionString);
+                try
+                {
+                    HttpListenerContext context = listener.GetContext();
+                    ProcessRequest(context, connectionString);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error processing request: {ex.Message}");
+                }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Server Error: {ex}");
+            Console.WriteLine($"Server Error: {ex.Message}");
         }
         finally
         {
@@ -93,20 +97,47 @@ class Program
             SendResponse(response, new { status = "error", message = "Internal server error" });
         }
     }
-
-    
+	
+    private static bool responseSent = false;
 
     public static void SendResponse(HttpListenerResponse response, object responseObject)
     {
-        string responseJson = JsonConvert.SerializeObject(responseObject);
-        byte[] buffer = Encoding.UTF8.GetBytes(responseJson);
-
-        response.ContentType = "application/json";
-        response.ContentLength64 = buffer.Length;
-        response.StatusCode = 200;
-        using (var output = response.OutputStream)
+        try
         {
-            output.Write(buffer, 0, buffer.Length);
+            if (!responseSent)
+            {
+                string responseJson = JsonConvert.SerializeObject(responseObject);
+                byte[] buffer = Encoding.UTF8.GetBytes(responseJson);
+
+                response.ContentType = "application/json";
+                response.ContentLength64 = buffer.Length;
+                response.StatusCode = 200;
+
+                using (var output = response.OutputStream)
+                {
+                    output.Write(buffer, 0, buffer.Length);
+                }
+
+                responseSent = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending response: {ex.Message}");
+            Console.WriteLine("Response details:");
+            Console.WriteLine($"ContentType: {response.ContentType}");
+            Console.WriteLine($"ContentLength64: {response.ContentLength64}");
+            Console.WriteLine($"StatusCode: {response.StatusCode}");
+
+            try
+            {
+                string responseJson = JsonConvert.SerializeObject(responseObject);
+                Console.WriteLine($"Response Object: {responseJson}");
+            }
+            catch (Exception jsonEx)
+            {
+                Console.WriteLine($"Error serializing response object: {jsonEx.Message}");
+            }
         }
     }
 }
